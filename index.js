@@ -4,6 +4,113 @@ const app = express();
 const mqtt = require("mqtt");
 const client = mqtt.connect("mqtt://172.20.10.3:1883");
 
+function jsonObjects(jsonString) {
+  var jsonObjects = [];
+  var remainingString = "";
+  var depth = 0;
+  var indexStart = 0;
+  var indexEnd = 0;
+  var pointer = 0;
+
+  if (!jsonString.includes("{") && !jsonString.includes("}")) {
+    jsonObjects.push({ pretext: jsonString, json: null });
+  } else {
+    for (var i = 0; i < jsonString.length; i++) {
+      if (jsonString.charAt(i) === "{") {
+        if (depth === 0) {
+          indexStart = i;
+        }
+        depth++;
+      } else if (jsonString.charAt(i) === "}") {
+        depth--;
+        if (depth === 0) {
+          indexEnd = i;
+
+          var finalJson = JSON.parse(
+            jsonString.substring(indexStart, indexEnd + 1)
+          );
+          var gapText = jsonString.substring(pointer, indexStart);
+          jsonObjects.push({ pretext: gapText, json: finalJson });
+
+          pointer = indexEnd + 1;
+          remainingString = jsonString.substring(pointer, jsonString.length);
+
+          if (
+            !remainingString.includes("{") &&
+            !remainingString.includes("}")
+          ) {
+            jsonObjects.push({ pretext: remainingString, json: null });
+          }
+        }
+      }
+    }
+  }
+  return jsonObjects;
+}
+
+setInterval(() => {
+  var myHeaders = new Headers();
+  myHeaders.append(
+    "Authorization",
+    "Bearer NNSXS.AFXIMSE6QXHFGBFXSYHMQQ6XFXJKDAOKRNFGHHI.N4WWBDZ7B7TNJA4IKJ6DGZAS6PNSRQBXZSWPFZT5ZSON52NGJW2A"
+  );
+
+  var requestOptions = {
+    method: "GET",
+    headers: myHeaders,
+    redirect: "follow",
+  };
+
+  fetch(
+    "https://eu1.cloud.thethings.network/api/v3/as/applications/soulmbengue-app-lorawansrv-1/packages/storage/uplink_message",
+    requestOptions
+  )
+    .then((response) => response.text())
+    .then((result) => {
+      let jsonArray = [];
+      jsonObjects(result).map((value) => {
+        if (value.json && value.json.result.uplink_message.decoded_payload)
+          jsonArray.push({
+            conductSoil:
+              value.json.result.uplink_message.decoded_payload.conduct_SOIL,
+            tempSoil:
+              value.json.result.uplink_message.decoded_payload.temp_SOIL,
+            waterSoil:
+              value.json.result.uplink_message.decoded_payload.water_SOIL,
+            receivedAt: value.json.result.received_at,
+          });
+      });
+
+      console.log(JSON.stringify(jsonArray));
+      if (!fs.existsSync("./temp/lorawan.json")) {
+        fs.appendFile(
+          "./temp/lorawan.json",
+          JSON.stringify(jsonArray),
+          (err) => {
+            if (err) {
+              console.log("Error writing file", err);
+            } else {
+              console.log("Successfully wrote file");
+            }
+          }
+        );
+      } else {
+        fs.writeFile(
+          "./temp/lorawan.json",
+          JSON.stringify(jsonArray),
+          (err) => {
+            if (err) {
+              console.log("Error writing file", err);
+            } else {
+              console.log("Successfully wrote file");
+            }
+          }
+        );
+      }
+    })
+    .catch((error) => console.log("error", error));
+}, 20 * 60000); // 20min
+
 client.on("connect", function () {
   client.subscribe("esp");
 });
@@ -116,4 +223,11 @@ app.put("/api/Esp32/:name", (req, res) => {
     );
   }
 });
-app.listen(3000, "0.0.0.0");
+app.get("/lorawan", (req, res) => {
+  fs.readFile("./temp/lorawan.json", (err, data) => {
+    if (!err) {
+      res.status(200).json(JSON.parse(data));
+    }
+  });
+});
+app.listen(3001, "0.0.0.0");
