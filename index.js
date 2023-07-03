@@ -72,18 +72,15 @@ setInterval(() => {
         if (value.json && value.json.result.uplink_message.decoded_payload)
           jsonArray.push({
             conductSoil:
-              value.json.result.uplink_message.decoded_payload.conduct_SOIL,
+              parseInt(value.json.result.uplink_message.decoded_payload.conduct_SOIL),
             tempSoil:
-              value.json.result.uplink_message.decoded_payload.temp_SOIL,
+              parseInt(value.json.result.uplink_message.decoded_payload.temp_SOIL),
             waterSoil:
-              value.json.result.uplink_message.decoded_payload.water_SOIL,
+              parseInt(value.json.result.uplink_message.decoded_payload.water_SOIL),
             receivedAt: value.json.result.received_at,
           });
       });
-
-      console.log(JSON.stringify(jsonArray));
-      if (!fs.existsSync("./temp/lorawan.json")) {
-        fs.appendFile(
+      fs.writeFile(
           "./temp/lorawan.json",
           JSON.stringify(jsonArray),
           (err) => {
@@ -94,19 +91,6 @@ setInterval(() => {
             }
           }
         );
-      } else {
-        fs.writeFile(
-          "./temp/lorawan.json",
-          JSON.stringify(jsonArray),
-          (err) => {
-            if (err) {
-              console.log("Error writing file", err);
-            } else {
-              console.log("Successfully wrote file");
-            }
-          }
-        );
-      }
     })
     .catch((error) => console.log("error", error));
 }, 20 * 60000); // 20min
@@ -230,4 +214,4 @@ app.get("/lorawan", (req, res) => {
     }
   });
 });
-app.listen(3001, "0.0.0.0");
+app.listen(3000, "0.0.0.0");

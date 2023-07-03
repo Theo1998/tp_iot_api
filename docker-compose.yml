@@ -1,0 +1,21 @@
+version: '3'
+services:
+  # Node.js service
+  nodejs-app:
+    build: .
+    ports:
+      - '3000:3000'  # Forward host port 3000 to container port 3000
+    volumes:
+      - .:/app      # Mount the current directory into the container to reflect code changes immediately
+    depends_on:
+      - mongo-db    # Depend on the mongo-db service
+
+  # MongoDB service
+  mongo-db:
+    image: mongo:latest
+    ports:
+      - '27017:27017'  # Forward host port 27017 to container port 27017
+    volumes:
+      - mongo-data:/data/db  # Persist MongoDB data outside the container
+volumes:
+  mongo-data:
