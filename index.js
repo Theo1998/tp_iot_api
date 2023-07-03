@@ -56,7 +56,7 @@ function jsonObjects(jsonString) {
   return jsonObjects;
 }
 
-cron.schedule("* * * * *", () => {
+cron.schedule("*/20 * * * *", () => {
   // 20min
   var myHeaders = new Headers();
   myHeaders.append(
