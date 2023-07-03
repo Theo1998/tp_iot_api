@@ -3,6 +3,13 @@ const fs = require("fs");
 const app = express();
 const mqtt = require("mqtt");
 const client = mqtt.connect("mqtt://172.20.10.3:1883");
+const cron = require('node-cron');
+const mongoose = require('mongoose');
+const clientOptions = {
+  dbName            : 'tpiotdb'
+};
+mongoose.connect(process.env.URL_MONGO, clientOptions);
+const SENSOR = require("./models/sensor")
 
 function jsonObjects(jsonString) {
   var jsonObjects = [];
@@ -48,7 +55,7 @@ function jsonObjects(jsonString) {
   return jsonObjects;
 }
 
-setInterval(() => {
+cron.schedule('*/20 * * * *', () => { // 20min
   var myHeaders = new Headers();
   myHeaders.append(
     "Authorization",
@@ -68,32 +75,24 @@ setInterval(() => {
     .then((response) => response.text())
     .then((result) => {
       let jsonArray = [];
-      jsonObjects(result).map((value) => {
-        if (value.json && value.json.result.uplink_message.decoded_payload)
-          jsonArray.push({
-            conductSoil:
-              parseInt(value.json.result.uplink_message.decoded_payload.conduct_SOIL),
-            tempSoil:
-              parseInt(value.json.result.uplink_message.decoded_payload.temp_SOIL),
-            waterSoil:
-              parseInt(value.json.result.uplink_message.decoded_payload.water_SOIL),
-            receivedAt: value.json.result.received_at,
-          });
-      });
-      fs.writeFile(
-          "./temp/lorawan.json",
-          JSON.stringify(jsonArray),
-          (err) => {
-            if (err) {
-              console.log("Error writing file", err);
-            } else {
-              console.log("Successfully wrote file");
-            }
+      jsonObjects(result).map( async (value) => {
+        if (value.json && value.json.result.uplink_message.decoded_payload) {
+          let sensor = await SENSOR.create({
+              conductSoil:
+                parseInt(value.json.result.uplink_message.decoded_payload.conduct_SOIL),
+              tempSoil:
+                parseInt(value.json.result.uplink_message.decoded_payload.temp_SOIL),
+              waterSoil:
+                parseInt(value.json.result.uplink_message.decoded_payload.water_SOIL),
+              receivedAt: value.json.result.received_at,
+            });
           }
-        );
+          console.log("Sensor creation", sensor)
+      });
+      
     })
     .catch((error) => console.log("error", error));
-}, 20 * 60000); // 20min
+});
 
 client.on("connect", function () {
   client.subscribe("esp");
@@ -207,11 +206,8 @@ app.put("/api/Esp32/:name", (req, res) => {
     );
   }
 });
-app.get("/lorawan", (req, res) => {
-  fs.readFile("./temp/lorawan.json", (err, data) => {
-    if (!err) {
-      res.status(200).json(JSON.parse(data));
-    }
-  });
+app.get("/lorawan", async (req, res) => {
+  const sensors = await SENSOR.find({})
+  res.status(200).json(sensors)
 });
 app.listen(3000, "0.0.0.0");

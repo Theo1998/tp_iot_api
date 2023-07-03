@@ -4,18 +4,27 @@ services:
   nodejs-app:
     build: .
     ports:
-      - '3000:3000'  # Forward host port 3000 to container port 3000
+      - '3000:3000' # Forward host port 3000 to container port 3000
     volumes:
-      - .:/app      # Mount the current directory into the container to reflect code changes immediately
-    depends_on:
-      - mongo-db    # Depend on the mongo-db service
+      - .:/app # Mount the current directory into the container to reflect code changes immediately
+    links:
+      - mongo-db
+    environment:
+      - URL_MONGO=mongodb://admin:KqDBygsbwfzGvz@mongo-db/
 
   # MongoDB service
   mongo-db:
     image: mongo:latest
     ports:
-      - '27017:27017'  # Forward host port 27017 to container port 27017
+      - '27017:27017' # Forward host port 27017 to container port 27017
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: KqDBygsbwfzGvz
+      MONGO_INITDB_ROOT_DATABASE: mongodb
+      TPIOT_PASSWORD: QgDNMkNygrsEXo
+
     volumes:
-      - mongo-data:/data/db  # Persist MongoDB data outside the container
+      - mongo-data:/data/db # Persist MongoDB data outside the container
+      - ./mongo-init.sh:/docker-entrypoint-initdb.d/mongo-init.sh:ro
 volumes:
   mongo-data:

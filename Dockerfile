@@ -10,10 +10,8 @@ COPY package*.json ./
 # Install Node.js dependencies
 RUN npm install
 
-RUN npm install -g nodemon
-
 # Copy the rest of the application code
 COPY . .
 
 # Start the Node.js application
-CMD ["nodemon"]
+CMD ["npm", "start"]
