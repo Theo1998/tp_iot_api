@@ -10,6 +10,7 @@ const clientOptions = {
 };
 mongoose.connect(process.env.URL_MONGO, clientOptions);
 const SENSOR = require("./models/sensor");
+const TEMP = require("./models/temp");
 
 function jsonObjects(jsonString) {
   var jsonObjects = [];
@@ -101,7 +102,7 @@ client.on("connect", function () {
   client.subscribe("esp");
 });
 
-client.on("message", function (topic, message) {
+client.on("message", async function (topic, message) {
   // message is Buffer
   console.log("Received Message:", topic, message.toString());
   if (topic !== "esp") {
@@ -113,47 +114,18 @@ client.on("message", function (topic, message) {
         date: new Date().getUTCDate(),
       };
     });
-    if (!fs.existsSync("./temp/" + topic + ".json")) {
-      fs.appendFile(
-        "./temp/" + topic + ".json",
-        JSON.stringify(json),
-        (err) => {
-          if (err) {
-            console.log("Error writing file", err);
-          } else {
-            console.log("Successfully wrote file");
-          }
-        }
-      );
-    } else {
-      fs.writeFile("./temp/" + topic + ".json", JSON.stringify(json), (err) => {
-        if (err) {
-          console.log("Error writing file", err);
-        } else {
-          console.log("Successfully wrote file");
-        }
-      });
-    }
-    fs.readdir("./temp", (err, files) => {
-      if (!err) {
-        let temperatures = [];
-        files.forEach((file) => {
-          fs.readFile(file, (err, data) => {
-            if (!err) {
-              let jsonData = JSON.parse(data.toString());
-              temperatures.push(...jsonData.temperatures);
-            }
-          });
-        });
-        console.log("Pub: ", "temperatures");
-        client.publish(
-          "temperatures",
-          JSON.stringify({
-            temperatures,
-          })
-        );
-      }
+    let temp = await TEMP.create({
+      name: topic,
+      temperatures: json
     });
+    let saveTemp = await TEMP.find({});
+    saveTemp.map((data) => data.temperatures);
+    client.publish(
+      "temperatures",
+      JSON.stringify({
+        saveTemp,
+      })
+    );
   } else {
     console.log("Sub:", message.toString());
     client.subscribe(message.toString());
@@ -168,7 +140,7 @@ app.get("/", (req, res) => {
     connectionFreq: 30,
   });
 });
-app.put("/api/Esp32/:name", (req, res) => {
+app.put("/api/Esp32/:name", async (req, res) => {
   console.log(req.body);
   let json = req.body;
   json.data.temperatures.map((temp) => {
@@ -177,42 +149,20 @@ app.put("/api/Esp32/:name", (req, res) => {
       date: new Date().getUTCDate(),
     };
   });
-  if (!fs.existsSync("./temp/" + req.params.name + ".json")) {
-    fs.appendFile(
-      "./temp/" + req.params.name + ".json",
-      JSON.stringify(json),
-      (err) => {
-        if (err) {
-          console.log("Error writing file", err);
-          res.status(400);
-        } else {
-          console.log("Successfully wrote file");
-          let file = require("./temp/" + req.params.name + ".json");
-          res.status(200).json(file);
-        }
-      }
-    );
-  } else {
-    fs.writeFile(
-      "./temp/" + req.params.name + ".json",
-      JSON.stringify(json),
-      (err) => {
-        if (err) {
-          console.log("Error writing file", err);
-          res.status(400);
-        } else {
-          console.log("Successfully wrote file");
-          let file = require("./temp/" + req.params.name + ".json");
-          res.status(200).json(file);
-        }
-      }
-    );
-  }
+  let temp = await TEMP.create({
+    name: req.params.name,
+    temperatures: json
+  });
+  let saveTemp = await TEMP.find({});
+  saveTemp.map((data) => data.temperatures);
+  res.status(200).json(saveTemp);
 });
 app.get("/lorawan", async (req, res) => {
   let d = new Date();
-  d.setMonth(d.getMonth() - 1);
-  const sensors = await SENSOR.find({ receivedAt: { $gte: d, $lt: new Date() }, });
+  d.setDate(d.getDate() - 1);
+  const sensors = await SENSOR.find({
+    receivedAt: { $gte: d, $lt: new Date() },
+  });
   res.status(200).json(sensors);
 });
 app.listen(3000, "0.0.0.0");

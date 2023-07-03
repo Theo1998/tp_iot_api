@@ -9,4 +9,5 @@ db.createUser({
   roles: [{ role: 'readWrite', db: 'tpiotdb' }],
 });
 db.createCollection('sensors')
+db.createCollection('temperatures')
 EOF
