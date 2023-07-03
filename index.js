@@ -3,13 +3,13 @@ const fs = require("fs");
 const app = express();
 const mqtt = require("mqtt");
 const client = mqtt.connect("mqtt://172.20.10.3:1883");
-const cron = require('node-cron');
-const mongoose = require('mongoose');
+const cron = require("node-cron");
+const mongoose = require("mongoose");
 const clientOptions = {
-  dbName            : 'tpiotdb'
+  dbName: "tpiotdb",
 };
 mongoose.connect(process.env.URL_MONGO, clientOptions);
-const SENSOR = require("./models/sensor")
+const SENSOR = require("./models/sensor");
 
 function jsonObjects(jsonString) {
   var jsonObjects = [];
@@ -55,7 +55,8 @@ function jsonObjects(jsonString) {
   return jsonObjects;
 }
 
-cron.schedule('*/20 * * * *', () => { // 20min
+cron.schedule("* * * * *", () => {
+  // 20min
   var myHeaders = new Headers();
   myHeaders.append(
     "Authorization",
@@ -75,21 +76,23 @@ cron.schedule('*/20 * * * *', () => { // 20min
     .then((response) => response.text())
     .then((result) => {
       let jsonArray = [];
-      jsonObjects(result).map( async (value) => {
+      jsonObjects(result).map(async (value) => {
         if (value.json && value.json.result.uplink_message.decoded_payload) {
           let sensor = await SENSOR.create({
-              conductSoil:
-                parseInt(value.json.result.uplink_message.decoded_payload.conduct_SOIL),
-              tempSoil:
-                parseInt(value.json.result.uplink_message.decoded_payload.temp_SOIL),
-              waterSoil:
-                parseInt(value.json.result.uplink_message.decoded_payload.water_SOIL),
-              receivedAt: value.json.result.received_at,
-            });
-          }
-          console.log("Sensor creation", sensor)
+            conductSoil: parseInt(
+              value.json.result.uplink_message.decoded_payload.conduct_SOIL
+            ),
+            tempSoil: parseInt(
+              value.json.result.uplink_message.decoded_payload.temp_SOIL
+            ),
+            waterSoil: parseInt(
+              value.json.result.uplink_message.decoded_payload.water_SOIL
+            ),
+            receivedAt: value.json.result.received_at,
+          });
+        }
+        console.log("Sensor creation");
       });
-      
     })
     .catch((error) => console.log("error", error));
 });
@@ -207,7 +210,9 @@ app.put("/api/Esp32/:name", (req, res) => {
   }
 });
 app.get("/lorawan", async (req, res) => {
-  const sensors = await SENSOR.find({})
-  res.status(200).json(sensors)
+  let d = new Date();
+  d.setMonth(d.getMonth() - 1);
+  const sensors = await SENSOR.find({ receivedAt: { $gte: d, $lt: new Date() }, });
+  res.status(200).json(sensors);
 });
 app.listen(3000, "0.0.0.0");
