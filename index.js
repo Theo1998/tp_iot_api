@@ -2,15 +2,25 @@ const express = require("express");
 const fs = require("fs");
 const app = express();
 const mqtt = require("mqtt");
-const client = mqtt.connect("mqtt://172.20.10.3:1883");
+const clientMqtt = mqtt.connect("mqtt://host.docker.internal:1883");
 const cron = require("node-cron");
 const mongoose = require("mongoose");
 const clientOptions = {
   dbName: "tpiotdb",
 };
+const CONFIG = {
+  tempFreq: 2,
+  connectionConfig: 1,
+  connectionFreq: 20,
+}
 mongoose.connect(process.env.URL_MONGO, clientOptions);
 const SENSOR = require("./models/sensor");
 const TEMP = require("./models/temp");
+
+const cors = require('cors');
+app.use(cors({
+    origin: '*'
+}));
 
 function jsonObjects(jsonString) {
   var jsonObjects = [];
@@ -98,71 +108,66 @@ cron.schedule("*/20 * * * *", () => {
     .catch((error) => console.log("error", error));
 });
 
-client.on("connect", function () {
-  client.subscribe("esp");
+clientMqtt.on("connect", function () {
+  console.log("Client connected")
+  clientMqtt.subscribe("esp");
 });
 
-client.on("message", async function (topic, message) {
+clientMqtt.on("message", async function (topic, message) {
   // message is Buffer
   console.log("Received Message:", topic, message.toString());
   if (topic !== "esp") {
     console.log("Save:", topic);
     let json = message.toJSON();
-    json.data.temperatures.map((temp) => {
+    console.log("JSON value:", json)
+    let now = new Date()
+    json = json.data.map((temp, index) => {
       return {
         data: temp,
-        date: new Date().getUTCDate(),
+        date: new Date(now - index * CONFIG.tempFreq * 1000 * 60 * 60),
       };
     });
-    let temp = await TEMP.create({
+    await TEMP.create({
       name: topic,
       temperatures: json
     });
-    let saveTemp = await TEMP.find({});
-    saveTemp.map((data) => data.temperatures);
-    client.publish(
-      "temperatures",
-      JSON.stringify({
-        saveTemp,
-      })
-    );
   } else {
     console.log("Sub:", message.toString());
-    client.subscribe(message.toString());
+    clientMqtt.subscribe(message.toString());
   }
 });
 
 app.use(express.json());
 app.get("/", (req, res) => {
-  res.status(200).json({
-    tempFreq: 10,
-    connectionConfig: 2,
-    connectionFreq: 30,
-  });
+  res.status(200).json(CONFIG);
 });
 app.put("/api/Esp32/:name", async (req, res) => {
   console.log(req.body);
   let json = req.body;
-  json.data.temperatures.map((temp) => {
+  let now = new Date()
+  json = json.temperatures.map((temp, index) => {
     return {
       data: temp,
-      date: new Date().getUTCDate(),
+      date: new Date(now - index * CONFIG.tempFreq * 1000 * 60 * 60),
     };
   });
-  let temp = await TEMP.create({
+  await TEMP.create({
     name: req.params.name,
     temperatures: json
   });
-  let saveTemp = await TEMP.find({});
-  saveTemp.map((data) => data.temperatures);
-  res.status(200).json(saveTemp);
+  res.status(200);
 });
 app.get("/lorawan", async (req, res) => {
   let d = new Date();
   d.setDate(d.getDate() - 1);
   const sensors = await SENSOR.find({
     receivedAt: { $gte: d, $lt: new Date() },
-  });
-  res.status(200).json(sensors);
+  }).sort({ receivedAt: 1 });
+  const temps = await TEMP.find({createdAt: { $gte: d, $lt: new Date() },}).sort({ createdAt: 1 })
+  let data = {lorawan: sensors, temperatures: []}
+  temps.forEach(temp => {
+    data.temperatures.push(...temp.temperatures)
+  })
+  res.status(200).json(data);
 });
 app.listen(3000, "0.0.0.0");

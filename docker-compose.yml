@@ -3,6 +3,7 @@ services:
   # Node.js service
   nodejs-app:
     build: .
+    restart: unless-stopped
     ports:
       - '3000:3000' # Forward host port 3000 to container port 3000
     volumes:
@@ -15,6 +16,7 @@ services:
   # MongoDB service
   mongo-db:
     image: mongo:latest
+    restart: on-failure
     ports:
       - '27017:27017' # Forward host port 27017 to container port 27017
     environment:
@@ -28,3 +30,6 @@ services:
       - ./mongo-init.sh:/docker-entrypoint-initdb.d/mongo-init.sh:ro
 volumes:
   mongo-data:
+networks:
+  lan_access:
+    driver: bridge
